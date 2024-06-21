@@ -26,6 +26,7 @@ from preprocess.humanparsing.run_parsing import Parsing
 from preprocess.openpose.run_openpose import OpenPose
 from detectron2.data.detection_utils import convert_PIL_to_numpy,_apply_exif_orientation
 from torchvision.transforms.functional import to_pil_image
+from transformers import AutoModelForCausalLM
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
@@ -54,7 +55,6 @@ unet = UNet2DConditionModel.from_pretrained(
     base_path,
     subfolder="unet",
     torch_dtype=torch.float16,
-    quantization_config = quantization_config,
     
 )
 unet.requires_grad_(False)
