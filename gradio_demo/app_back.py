@@ -45,7 +45,10 @@ def pil_to_binary_mask(pil_image, threshold=0):
 
 base_path = 'yisol/IDM-VTON'
 example_path = os.path.join(os.path.dirname(__file__), 'example')
-quantization_config = BitsAndBytesConfig(load_in_4bit=True,)
+quantization_config = BitsAndBytesConfig( load_in_4bit=True, 
+                                        bnb_4bit_compute_dtype=torch.float16
+                                        # Adjust compute dtype if needed 
+                                        )
 
 unet = UNet2DConditionModel.from_pretrained(
     base_path,
@@ -60,14 +63,14 @@ tokenizer_one = AutoTokenizer.from_pretrained(
     subfolder="tokenizer",
     revision=None,
     use_fast=False,
-
+    quantization_config = quantization_config,
 )
 tokenizer_two = AutoTokenizer.from_pretrained(
     base_path,
     subfolder="tokenizer_2",
     revision=None,
     use_fast=False,
-    
+    quantization_config = quantization_config,
 )
 noise_scheduler = DDPMScheduler.from_pretrained(base_path, subfolder="scheduler",load_in_16bit=True,)
 
