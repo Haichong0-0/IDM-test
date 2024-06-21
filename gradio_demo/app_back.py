@@ -95,7 +95,7 @@ image_encoder = CLIPVisionModelWithProjection.from_pretrained(
     )
 vae = AutoencoderKL.from_pretrained(base_path,
                                     subfolder="vae",
-                                    #torch_dtype=torch.float16,
+                                    torch_dtype=torch.float16,
                                     quantization_config = quantization_config,
                                     
 )
@@ -137,6 +137,7 @@ pipe = TryonPipeline.from_pretrained(
         image_encoder=image_encoder,
         #torch_dtype=torch.float16,
         quantization_config = quantization_config,
+        device = "cuda"
     
 )
 pipe.unet_encoder = UNet_Encoder
@@ -144,7 +145,7 @@ def start_tryon(dict,garm_img,garm_part,garment_des,is_checked,segment_mask,is_c
     
     openpose_model.preprocessor.body_estimation.model.to(device)
     #pipe.to(device)
-    #pipe.unet_encoder.to(device)
+    pipe.unet_encoder.to(device)
 
     garm_img= garm_img.convert("RGB").resize((768,1024))
     human_img_orig = dict["background"].convert("RGB")    
