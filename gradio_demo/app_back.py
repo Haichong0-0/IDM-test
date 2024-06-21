@@ -51,6 +51,7 @@ unet = UNet2DConditionModel.from_pretrained(
     base_path,
     subfolder="unet",
     torch_dtype=torch.float16,
+    quantization_config = quantization_config,
     
 )
 unet.requires_grad_(False)
@@ -74,19 +75,19 @@ text_encoder_one = CLIPTextModel.from_pretrained(
     base_path,
     subfolder="text_encoder",
     torch_dtype=torch.float16,
-    
+    quantization_config = quantization_config,
 )
 text_encoder_two = CLIPTextModelWithProjection.from_pretrained(
     base_path,
     subfolder="text_encoder_2",
     torch_dtype=torch.float16,
-    
+    quantization_config = quantization_config,
 )
 image_encoder = CLIPVisionModelWithProjection.from_pretrained(
     base_path,
     subfolder="image_encoder",
     torch_dtype=torch.float16,
-    
+    quantization_config = quantization_config,
     )
 vae = AutoencoderKL.from_pretrained(base_path,
                                     subfolder="vae",
@@ -99,7 +100,7 @@ UNet_Encoder = UNet2DConditionModel_ref.from_pretrained(
     base_path,
     subfolder="unet_encoder",
     torch_dtype=torch.float16,
-    
+    quantization_config = quantization_config,
 )
 
 parsing_model = Parsing(0)
