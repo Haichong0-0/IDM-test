@@ -55,6 +55,7 @@ unet = UNet2DConditionModel.from_pretrained(
     base_path,
     subfolder="unet",
     torch_dtype=torch.float16,
+    quantization_config = quantization_config,
     
 )
 unet.requires_grad_(False)
@@ -95,6 +96,7 @@ image_encoder = CLIPVisionModelWithProjection.from_pretrained(
 vae = AutoencoderKL.from_pretrained(base_path,
                                     subfolder="vae",
                                     torch_dtype=torch.float16,
+                                    quantization_config = quantization_config,
                                     
 )
 
@@ -134,14 +136,15 @@ pipe = TryonPipeline.from_pretrained(
         scheduler = noise_scheduler,
         image_encoder=image_encoder,
         torch_dtype=torch.float16,
-
+        quantization_config = quantization_config,
+    
 )
 pipe.unet_encoder = UNet_Encoder
 def start_tryon(dict,garm_img,garm_part,garment_des,is_checked,segment_mask,is_checked_crop,denoise_steps,seed):
     
     openpose_model.preprocessor.body_estimation.model.to(device)
-    pipe.to(device)
-    pipe.unet_encoder.to(device)
+    #pipe.to(device)
+    #pipe.unet_encoder.to(device)
 
     garm_img= garm_img.convert("RGB").resize((768,1024))
     human_img_orig = dict["background"].convert("RGB")    
