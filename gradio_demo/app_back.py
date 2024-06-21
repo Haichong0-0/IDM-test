@@ -54,7 +54,7 @@ quantization_config = BitsAndBytesConfig( load_in_4bit=True,
 unet = UNet2DConditionModel.from_pretrained(
     base_path,
     subfolder="unet",
-    torch_dtype=torch.float16,
+    #torch_dtype=torch.float16,
     quantization_config = quantization_config,
     
 )
@@ -73,29 +73,29 @@ tokenizer_two = AutoTokenizer.from_pretrained(
     use_fast=False,
     quantization_config = quantization_config,
 )
-noise_scheduler = DDPMScheduler.from_pretrained(base_path, subfolder="scheduler",load_in_16bit=True,)
+noise_scheduler = DDPMScheduler.from_pretrained(base_path, subfolder="scheduler",quantization_config = quantization_config)
 
 text_encoder_one = CLIPTextModel.from_pretrained(
     base_path,
     subfolder="text_encoder",
-    torch_dtype=torch.float16,
+    #torch_dtype=torch.float16,
     quantization_config = quantization_config,
 )
 text_encoder_two = CLIPTextModelWithProjection.from_pretrained(
     base_path,
     subfolder="text_encoder_2",
-    torch_dtype=torch.float16,
+    #torch_dtype=torch.float16,
     quantization_config = quantization_config,
 )
 image_encoder = CLIPVisionModelWithProjection.from_pretrained(
     base_path,
     subfolder="image_encoder",
-    torch_dtype=torch.float16,
+    #torch_dtype=torch.float16,
     quantization_config = quantization_config,
     )
 vae = AutoencoderKL.from_pretrained(base_path,
                                     subfolder="vae",
-                                    torch_dtype=torch.float16,
+                                    #torch_dtype=torch.float16,
                                     quantization_config = quantization_config,
                                     
 )
@@ -104,7 +104,7 @@ vae = AutoencoderKL.from_pretrained(base_path,
 UNet_Encoder = UNet2DConditionModel_ref.from_pretrained(
     base_path,
     subfolder="unet_encoder",
-    torch_dtype=torch.float16,
+    #torch_dtype=torch.float16,
     quantization_config = quantization_config,
 )
 
@@ -135,7 +135,7 @@ pipe = TryonPipeline.from_pretrained(
         tokenizer_2 = tokenizer_two,
         scheduler = noise_scheduler,
         image_encoder=image_encoder,
-        torch_dtype=torch.float16,
+        #torch_dtype=torch.float16,
         quantization_config = quantization_config,
     
 )
