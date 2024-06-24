@@ -1607,7 +1607,7 @@ class StableDiffusionXLInpaintPipeline(
         return_image_latents = num_channels_unet == 4
 
         add_noise = True if self.denoising_start is None else False
-        print(device)
+        #print(device)
         latents_outputs = self.prepare_latents(
             batch_size * num_images_per_prompt,
             num_channels_latents,

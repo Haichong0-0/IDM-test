@@ -27,6 +27,7 @@ from preprocess.openpose.run_openpose import OpenPose
 from detectron2.data.detection_utils import convert_PIL_to_numpy,_apply_exif_orientation
 from torchvision.transforms.functional import to_pil_image
 from transformers import AutoModelForCausalLM
+import bitsandbytes
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
@@ -51,11 +52,17 @@ quantization_config = BitsAndBytesConfig( load_in_4bit=True,
                                         # Adjust compute dtype if needed 
                                         )
 
+out_size = (768,1024)
+#(1920,2560)
+half_outsize= (int(out_size[0]/2),int(out_size[1]/2))
+#(768,1024)
+#in_size  = 
+
 unet = UNet2DConditionModel.from_pretrained(
     base_path,
     subfolder="unet",
-    #torch_dtype=torch.float16,
-    quantization_config = quantization_config,
+    torch_dtype=torch.float16,
+    #quantization_config = quantization_config,
     
 )
 unet.requires_grad_(False)
@@ -64,39 +71,39 @@ tokenizer_one = AutoTokenizer.from_pretrained(
     subfolder="tokenizer",
     revision=None,
     use_fast=False,
-    quantization_config = quantization_config,
+
 )
 tokenizer_two = AutoTokenizer.from_pretrained(
     base_path,
     subfolder="tokenizer_2",
     revision=None,
     use_fast=False,
-    quantization_config = quantization_config,
+
 )
 noise_scheduler = DDPMScheduler.from_pretrained(base_path, subfolder="scheduler",quantization_config = quantization_config)
 
 text_encoder_one = CLIPTextModel.from_pretrained(
     base_path,
     subfolder="text_encoder",
-    #torch_dtype=torch.float16,
-    quantization_config = quantization_config,
+    torch_dtype=torch.float16,
+    #quantization_config = quantization_config,
 )
 text_encoder_two = CLIPTextModelWithProjection.from_pretrained(
     base_path,
     subfolder="text_encoder_2",
-    #torch_dtype=torch.float16,
-    quantization_config = quantization_config,
+    torch_dtype=torch.float16,
+    #quantization_config = quantization_config,
 )
 image_encoder = CLIPVisionModelWithProjection.from_pretrained(
     base_path,
     subfolder="image_encoder",
-    #torch_dtype=torch.float16,
-    quantization_config = quantization_config,
+    torch_dtype=torch.float16,
+    #quantization_config = quantization_config,
     )
 vae = AutoencoderKL.from_pretrained(base_path,
                                     subfolder="vae",
-                                    #torch_dtype=torch.float16,
-                                    quantization_config = quantization_config,
+                                    torch_dtype=torch.float16,
+                                    #quantization_config = quantization_config,
                                     
 )
 vae.to(device)
@@ -105,8 +112,8 @@ vae.to(device)
 UNet_Encoder = UNet2DConditionModel_ref.from_pretrained(
     base_path,
     subfolder="unet_encoder",
-    #torch_dtype=torch.float16,
-    quantization_config = quantization_config,
+    torch_dtype=torch.float16,
+    #quantization_config = quantization_config,
 )
 
 parsing_model = Parsing(0)
@@ -136,20 +143,29 @@ pipe = TryonPipeline.from_pretrained(
         tokenizer_2 = tokenizer_two,
         scheduler = noise_scheduler,
         image_encoder=image_encoder,
-        #torch_dtype=torch.float16,
-        quantization_config = quantization_config,
+        torch_dtype=torch.float16,
+        #quantization_config = quantization_config,
     
 )
 pipe.unet_encoder = UNet_Encoder
 def start_tryon(dict,garm_img,garm_part,garment_des,is_checked,segment_mask,is_checked_crop,denoise_steps,seed):
     
     openpose_model.preprocessor.body_estimation.model.to(device)
-    #pipe.to(device)
+    for module in pipe.unet.modules():
+        if isinstance(module, torch.nn.Linear):
+            module.weight = bitsandbytes.nn.Int8Params(
+                module.weight.data, 
+                has_fp16_weights=True,
+                requires_grad = False
+            ).to(module.weight.dtype)
+    
+    pipe.to(device)
     pipe.unet_encoder.to(device)
 
-    garm_img= garm_img.convert("RGB").resize((768,1024))
+    garm_img= garm_img.convert("RGB").resize(out_size)
     human_img_orig = dict["background"].convert("RGB")    
-    
+
+
     if is_checked_crop:
         width, height = human_img_orig.size
         target_width = int(min(width, height * (3 / 4)))
@@ -160,9 +176,9 @@ def start_tryon(dict,garm_img,garm_part,garment_des,is_checked,segment_mask,is_c
         bottom = (height + target_height) / 2
         cropped_img = human_img_orig.crop((left, top, right, bottom))
         crop_size = cropped_img.size
-        human_img = cropped_img.resize((768,1024))
+        human_img = cropped_img.resize(out_size)
     else:
-        human_img = human_img_orig.resize((768,1024))
+        human_img = human_img_orig.resize(out_size)
 
     #lower_body,dresses=> dc
     #upper_body=>hd
@@ -171,6 +187,7 @@ def start_tryon(dict,garm_img,garm_part,garment_des,is_checked,segment_mask,is_c
     if (garm_part =="upper_body"):
         selector = "hd"
 
+    
     #segment_mask = numpy.invert(segment_mask)
     #indices = np.where(segment_mask==255)
     #segment_mask[indices[0], indices[1], :] = [0, 0, 255]
@@ -179,10 +196,10 @@ def start_tryon(dict,garm_img,garm_part,garment_des,is_checked,segment_mask,is_c
         keypoints = openpose_model(human_img.resize((384,512)))
         model_parse, _ = parsing_model(human_img.resize((384,512)))
         mask, mask_gray = get_mask_location(selector, garm_part, model_parse, keypoints)
-        mask = mask.resize((768,1024))
+        mask = mask.resize(out_size)
         #(768,1024)
     else:
-        mask = pil_to_binary_mask(segment_mask.convert("RGB").resize((768,1024)))
+        mask = pil_to_binary_mask(segment_mask.convert("RGB").resize(out_size))
         #mask = pil_to_binary_mask(dict['layers'][0].convert("RGB").resize((768, 1024)))
 
         # mask = transforms.ToTensor()(mask)
@@ -193,7 +210,7 @@ def start_tryon(dict,garm_img,garm_part,garment_des,is_checked,segment_mask,is_c
     mask_gray = to_pil_image((mask_gray+1.0)/2.0)
     
 
-    human_img_arg = _apply_exif_orientation(human_img.resize((768,1024)))
+    human_img_arg = _apply_exif_orientation(human_img.resize(out_size))
     human_img_arg = convert_PIL_to_numpy(human_img_arg, format="BGR")
      
     
@@ -202,7 +219,7 @@ def start_tryon(dict,garm_img,garm_part,garment_des,is_checked,segment_mask,is_c
     # verbosity = getattr(args, "verbosity", None)
     pose_img = args.func(args,human_img_arg)    
     pose_img = pose_img[:,:,::-1]    
-    pose_img = Image.fromarray(pose_img).resize((768,1024))
+    pose_img = Image.fromarray(pose_img).resize(out_size)
     #(768,1024)
     with torch.no_grad():
         # Extract the images
@@ -260,9 +277,9 @@ def start_tryon(dict,garm_img,garm_part,garment_des,is_checked,segment_mask,is_c
                         cloth = garm_tensor.to(device,torch.float16),
                         mask_image=mask,
                         image=human_img, 
-                        height=1024,
-                        width=768,
-                        ip_adapter_image = garm_img.resize((768,1024)),
+                        height=out_size[1],
+                        width=out_size[0],
+                        ip_adapter_image = garm_img.resize(out_size),
                         guidance_scale=2.0,
                     )[0]
 
@@ -334,6 +351,7 @@ with image_blocks as demo:
         with gr.Column():
             # image_out = gr.Image(label="Output", elem_id="output-img", height=400)
             image_out = gr.Image(label="Output", elem_id="output-img",show_share_button=False)
+        
 
 
 
