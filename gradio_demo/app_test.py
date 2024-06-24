@@ -10,7 +10,6 @@ from transformers import (
     CLIPVisionModelWithProjection,
     CLIPTextModel,
     CLIPTextModelWithProjection,
-    BitsAndBytesConfig
 )
 from diffusers import DDPMScheduler,AutoencoderKL
 from typing import List
@@ -45,17 +44,13 @@ def pil_to_binary_mask(pil_image, threshold=0):
 
 base_path = 'yisol/IDM-VTON'
 example_path = os.path.join(os.path.dirname(__file__), 'example')
-quantization_config = BitsAndBytesConfig( 
-    load_in_4bit=True, 
-    bnb_4bit_use_double_quant=True, 
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16 )
+output_size = (3000,4000)
+
 
 unet = UNet2DConditionModel.from_pretrained(
     base_path,
     subfolder="unet",
-    #torch_dtype=torch.float16,
-    quantization_config = quantization_config,
+    torch_dtype=torch.float16,
 )
 unet.requires_grad_(False)
 tokenizer_one = AutoTokenizer.from_pretrained(
@@ -76,30 +71,27 @@ text_encoder_one = CLIPTextModel.from_pretrained(
     base_path,
     subfolder="text_encoder",
     torch_dtype=torch.float16,
-
 )
 text_encoder_two = CLIPTextModelWithProjection.from_pretrained(
     base_path,
     subfolder="text_encoder_2",
     torch_dtype=torch.float16,
-
 )
 image_encoder = CLIPVisionModelWithProjection.from_pretrained(
     base_path,
     subfolder="image_encoder",
+    torch_dtype=torch.float16,
     )
 vae = AutoencoderKL.from_pretrained(base_path,
                                     subfolder="vae",
-                                    #torch_dtype=torch.float16,
-                                    quantization_config = quantization_config,
+                                    torch_dtype=torch.float16,
 )
 
 # "stabilityai/stable-diffusion-xl-base-1.0",
 UNet_Encoder = UNet2DConditionModel_ref.from_pretrained(
     base_path,
     subfolder="unet_encoder",
-    #torch_dtype=torch.float16,
-    quantization_config = quantization_config,
+    torch_dtype=torch.float16,
 )
 
 parsing_model = Parsing(0)
@@ -129,18 +121,25 @@ pipe = TryonPipeline.from_pretrained(
         tokenizer_2 = tokenizer_two,
         scheduler = noise_scheduler,
         image_encoder=image_encoder,
-        #torch_dtype=torch.float16,
-        quantization_config = quantization_config,
+        torch_dtype=torch.float16,
 )
 pipe.unet_encoder = UNet_Encoder
 
+import bitsandbytes
 def start_tryon(dict,garm_img,garment_des,is_checked,is_checked_crop,denoise_steps,seed):
+    for module in pipe.unet.modules():
+        if isinstance(module, torch.nn.Linear):
+            module.weight = bitsandbytes.nn.Int8Params(
+                module.weight.data, 
+                has_fp16_weights=True,
+                requires_grad = False
+            ).to(module.weight.dtype)
     
     openpose_model.preprocessor.body_estimation.model.to(device)
     pipe.to(device)
     pipe.unet_encoder.to(device)
 
-    garm_img= garm_img.convert("RGB").resize((768,1024))
+    garm_img= garm_img.convert("RGB").resize((1536,2048))
     human_img_orig = dict["background"].convert("RGB")    
     
     if is_checked_crop:
@@ -153,25 +152,25 @@ def start_tryon(dict,garm_img,garment_des,is_checked,is_checked_crop,denoise_ste
         bottom = (height + target_height) / 2
         cropped_img = human_img_orig.crop((left, top, right, bottom))
         crop_size = cropped_img.size
-        human_img = cropped_img.resize((768,1024))
+        human_img = cropped_img.resize((1536,2048))
     else:
-        human_img = human_img_orig.resize((768,1024))
+        human_img = human_img_orig.resize((1536,2048))
 
 
     if is_checked:
-        keypoints = openpose_model(human_img.resize((384,512)))
-        model_parse, _ = parsing_model(human_img.resize((384,512)))
+        keypoints = openpose_model(human_img.resize((1536,2048)))
+        model_parse, _ = parsing_model(human_img.resize((1536,2048)))
         mask, mask_gray = get_mask_location('hd', "upper_body", model_parse, keypoints)
-        mask = mask.resize((768,1024))
+        mask = mask.resize((1536,2048))
     else:
-        mask = pil_to_binary_mask(dict['layers'][0].convert("RGB").resize((768, 1024)))
+        mask = pil_to_binary_mask(dict['layers'][0].convert("RGB").resize((1536,2048)))
         # mask = transforms.ToTensor()(mask)
         # mask = mask.unsqueeze(0)
     mask_gray = (1-transforms.ToTensor()(mask)) * tensor_transfrom(human_img)
     mask_gray = to_pil_image((mask_gray+1.0)/2.0)
 
 
-    human_img_arg = _apply_exif_orientation(human_img.resize((384,512)))
+    human_img_arg = _apply_exif_orientation(human_img.resize((768,1024)))
     human_img_arg = convert_PIL_to_numpy(human_img_arg, format="BGR")
      
     
@@ -180,7 +179,7 @@ def start_tryon(dict,garm_img,garment_des,is_checked,is_checked_crop,denoise_ste
     # verbosity = getattr(args, "verbosity", None)
     pose_img = args.func(args,human_img_arg)    
     pose_img = pose_img[:,:,::-1]    
-    pose_img = Image.fromarray(pose_img).resize((768,1024))
+    pose_img = Image.fromarray(pose_img).resize((1536,2048))
     
     with torch.no_grad():
         # Extract the images
@@ -238,9 +237,9 @@ def start_tryon(dict,garm_img,garment_des,is_checked,is_checked_crop,denoise_ste
                         cloth = garm_tensor.to(device,torch.float16),
                         mask_image=mask,
                         image=human_img, 
-                        height=1024,
-                        width=768,
-                        ip_adapter_image = garm_img.resize((768,1024)),
+                        height=output_size[0],
+                        width=output_size[1],
+                        ip_adapter_image = garm_img.resize(output_size),
                         guidance_scale=2.0,
                     )[0]
 
