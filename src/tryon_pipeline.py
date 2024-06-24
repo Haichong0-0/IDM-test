@@ -563,8 +563,8 @@ class StableDiffusionXLInpaintPipeline(
                 Number of layers to be skipped from CLIP while computing the prompt embeddings. A value of 1 means that
                 the output of the pre-final layer will be used for computing the prompt embeddings.
         """
-        #device = device or self._execution_device
-        device = torch.device("cuda")
+        device = device or self._execution_device
+        #device = torch.device("cuda")
 
 
         # set lora scale so that monkey patched LoRA
@@ -911,7 +911,7 @@ class StableDiffusionXLInpaintPipeline(
         dtype = image.dtype
         if self.vae.config.force_upcast:
             image = image.float()
-            self.vae.to(dtype=torch.float32)
+            self.vae.to(dtype=torch.float16)
 
         if isinstance(generator, list):
             image_latents = [
@@ -1525,8 +1525,8 @@ class StableDiffusionXLInpaintPipeline(
         else:
             batch_size = prompt_embeds.shape[0]
 
-        #device = self._execution_device
-        device = torch.device("cuda")
+        device = self._execution_device
+        #device = torch.device("cuda")
 
         # 3. Encode input prompt
         text_encoder_lora_scale = (
@@ -1607,6 +1607,7 @@ class StableDiffusionXLInpaintPipeline(
         return_image_latents = num_channels_unet == 4
 
         add_noise = True if self.denoising_start is None else False
+        print(device)
         latents_outputs = self.prepare_latents(
             batch_size * num_images_per_prompt,
             num_channels_latents,

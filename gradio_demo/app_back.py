@@ -95,10 +95,11 @@ image_encoder = CLIPVisionModelWithProjection.from_pretrained(
     )
 vae = AutoencoderKL.from_pretrained(base_path,
                                     subfolder="vae",
-                                    torch_dtype=torch.float16,
+                                    #torch_dtype=torch.float16,
                                     quantization_config = quantization_config,
                                     
 )
+vae.to(device)
 
 # "stabilityai/stable-diffusion-xl-base-1.0",
 UNet_Encoder = UNet2DConditionModel_ref.from_pretrained(
@@ -137,7 +138,6 @@ pipe = TryonPipeline.from_pretrained(
         image_encoder=image_encoder,
         #torch_dtype=torch.float16,
         quantization_config = quantization_config,
-        device = "cuda"
     
 )
 pipe.unet_encoder = UNet_Encoder
